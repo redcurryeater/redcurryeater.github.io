@@ -107,23 +107,6 @@ h1 a:hover { color: var(--red); }
   color: var(--cream-dim);
 }
 
-/* ——— red grease-pencil scrawl ——— */
-
-.scrawl {
-  font-family: Caveat, cursive;
-  font-size: clamp(21px, 2.4vw, 27px);
-  line-height: 1.1;
-  color: var(--red);
-  text-shadow: 0 0 12px rgba(226, 56, 47, .35);
-}
-
-.home .scrawl {
-  display: block;
-  margin: clamp(30px, 8vh, 80px) 6px 12px;
-  text-align: right;
-  transform: rotate(-2.2deg);
-}
-
 /* ——— the strip ——— */
 
 .strip {
@@ -131,7 +114,7 @@ h1 a:hover { color: var(--red); }
   flex-wrap: wrap;
   row-gap: 28px;
   column-gap: 0;
-  margin: 6px 0 56px;
+  margin: clamp(38px, 9vh, 92px) 0 56px;
   filter: drop-shadow(0 16px 22px rgba(0, 0, 0, .55));
 }
 
@@ -319,7 +302,7 @@ footer {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 26px;
-  justify-content: space-between;
+  justify-content: flex-end;
   font-size: 10px;
   letter-spacing: .2em;
   text-transform: uppercase;
@@ -390,12 +373,6 @@ footer a:hover { color: var(--red); }
   color: var(--cream-dim);
 }
 
-.dev .scrawl {
-  display: inline-block;
-  margin-top: 18px;
-  transform: rotate(-3deg);
-}
-
 /* ——— writeup defaults, for when the frames develop ——— */
 
 .writeup { max-width: 72ch; margin: 36px 0 56px; }
@@ -454,7 +431,6 @@ footer a:hover { color: var(--red); }
 
 @media (max-width: 560px) {
   .frame { width: clamp(148px, 44vw, 240px); }
-  .home .scrawl { text-align: left; transform: rotate(-1.6deg); }
 }
 
 @media (max-width: 660px) {
