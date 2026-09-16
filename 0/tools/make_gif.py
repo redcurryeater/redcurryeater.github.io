@@ -5,7 +5,7 @@ Respects EXIF rotation, downscales frames so the GIF stays web-sized, and
 letterboxes mixed portrait/landscape shots onto a common canvas.
 
 Usage:
-    python tools/make_gif.py <photo folder> [out.gif] [--width 640] [--ms 150]
+    python 0/tools/make_gif.py <photo folder> [out.gif] [--width 640] [--ms 150]
 
 Frames go in filename order (phone filenames sort chronologically).
 --width  max frame width in px (default 640 — good for the site)
