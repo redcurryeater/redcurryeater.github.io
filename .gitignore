@@ -1,6 +1,10 @@
 # raw phone imports — GIFs/stills made from these go in the project media folders instead
 0/photos/
 
+# course-provided source images for Project 1 (762 MB of .tif plate scans;
+# re-downloadable from the course site). Only finished outputs go in 1/media/.
+1/data/
+
 # uv environment (recreate with `uv sync`); uv.lock IS committed
 .venv/
 __pycache__/
