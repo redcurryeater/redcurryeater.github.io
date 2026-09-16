@@ -7,11 +7,12 @@ dependencies = [
     # media prep for the site (0/tools/make_gif.py)
     "pillow>=11",
     "pillow-heif>=0.18",       # iPhone .HEIC support
-    # project image processing (1/tools/colorfy.py and later projects)
+    # project image processing (1/tools/colorize_skel.py and later projects)
     "numpy>=2",
+    "opencv-python>=5",        # note: import name is `cv2`
+    "matplotlib>=3.9",
     "scikit-image>=0.24",      # note: import name is `skimage`
     "scipy>=1.14",
-    "matplotlib>=3.9",
 ]
 
 [tool.uv]
