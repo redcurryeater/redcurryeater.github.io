@@ -1,2 +1,6 @@
 # raw phone imports — GIFs/stills made from these go in the project media folders instead
 0/photos/
+
+# uv environment (recreate with `uv sync`); uv.lock IS committed
+.venv/
+__pycache__/
