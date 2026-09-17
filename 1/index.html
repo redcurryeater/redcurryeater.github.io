@@ -24,31 +24,171 @@
 
   <a class="back" href="../">← Contact sheet</a>
 
-  <p class="framemeta">Frame 01 · Status: <b>Undeveloped</b></p>
+  <!-- ▼ flip to Developed when the writeup is done -->
+  <p class="framemeta">Frame 01 · Status: <b>Developed</b></p>
   <h2 class="frametitle">Project 1</h2>
+  <!-- ▼ one-line subtitle, e.g. the project's full name -->
+  <p class="subtitle">Images of the Russian Empire: Colorizing the Prokudin-Gorskii photo collection</p>
 
-  <!-- ▼ Placeholder — delete this whole <section> when the writeup below is ready. -->
-  <section class="plate">
-    <span class="rail" aria-hidden="true"></span>
-    <div class="pic">
-      <div class="dev">
-        <p class="devline">This frame hasn't been developed yet.</p>
-        <p class="devsub">The writeup will appear here once the project is released.</p>
-      </div>
-    </div>
-    <span class="edgeline" aria-hidden="true"><b>▸ 01</b><span>TX&nbsp;5063</span></span>
-    <span class="rail" aria-hidden="true"></span>
-  </section>
-
-  <!-- ▼ Project writeup goes here. Suggested shapes:
-    <h2>Overview</h2>
-    <p>…</p>
-    <figure>
-      <img src="media/result.jpg" alt="Describe the result">
-      <figcaption>Fig. 1 — caption</figcaption>
-    </figure>
-  -->
   <main class="writeup">
+
+    <!-- ══ OVERVIEW ══════════════════════════════════════════════════
+         What the Prokudin-Gorskii plates are, what the task is, and how
+         the page is organized. A sentence or two on the approach. -->
+    <h2>Overview</h2>
+    <p> The Prokudin-Gorskii collection is a collection of photos taken before the era of colored photography. The photographer, Sergei Mikhailovich Prokudin-Gorskii, he set out to take black and white photographs that could be reconstructed into colored photographs. He took 3 photos at different color filters which capture frequencies corresponding to red, green, and blue. We can reconstruct the colored version of the photo by stacking those layers! 
+
+    </p>
+        
+    <!-- ══ APPROACH ══════════════════════════════════════════════════
+         The metric (NCC / L2), why the search is scored on an interior
+         crop, and how the pyramid works. Explain concepts here so the
+         results sections can just show results. -->
+    <h2>Approach</h2>
+    <p>The original photos come in a greyscale strip with the three different color filters stacked on each other. 
+      We had to cut up the pictures into thirds and then line them up correctly in order to reconstruct an accurate photo without color blur. To line them up correctly, we use the brightness of each channel and match them up by minimizing their pixelwise Euclidean distance or maximizing normalized cross-correlation (NCC). 
+      I used them interchangeably since I saw no difference. 
+        <br> The pictures have their shifts in their captions as "color · (dx, dy)" </p>
+    <!-- ══ DELIVERABLE 1 ═════════════════════════════════════════════
+         Single-scale exhaustive search on the three low-resolution JPEGs.
+         Mention the search window and why it's only feasible at this size. -->
+    <h2>Single-scale alignment</h2>
+    <p>In the naive exhaustive search method, I used nested for loops to try every x and y shift for the red and green channels and compared that with the blue channel, which was the anchored channel. At first I was getting erroneous results because I was using np.roll to shift the images, then taking the similarity score using all of the pixels, including the garbage that rolls over. 
+      I fixed this by only measuring the similarity of the pixels inside the center. 
+         </p>
+
+    <div class="row3">
+      <figure>
+        <img src="media/cathedral_simple.jpg" alt="Cathedral, colorized by single-scale alignment">
+        <figcaption>cathedral<span class="offs">g (2, 5) · r (3, 12)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/monastery_simple.jpg" alt="Monastery, colorized by single-scale alignment">
+        <figcaption>monastery<span class="offs">g (2, -3) · r (2, 3)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/tobolsk_simple.jpg" alt="Tobolsk, colorized by single-scale alignment">
+        <figcaption>tobolsk<span class="offs">g (3, 3) · r (3, 7)</span></figcaption>
+      </figure>
+    </div>
+
+    <!-- ══ DELIVERABLE 2 ═════════════════════════════════════════════
+         Pyramid alignment on every example image, plus the offset table.
+         Say why single-scale doesn't scale to the .tif plates. -->
+    <h2>Multi-scale pyramid alignment</h2>
+    <p>The naive approach is inefficient and works for small images since the shifts are only tens of pixels, but with larger images they are hundreds of pixels, which would take too long to process.
+      Thus we introduce the pyramid alignment. Pyramid alignment works by recursively downscaling an image and aligning on the downscaled image, and using the shift of the downscaled image as a reference point, we can align our image. 
+      This works with large images because the shift difference between the downscaled image and the normal image is only a few pixels and is mostly independent of picture size. 
+    </p>
+
+    <div class="row3">
+      <figure>
+        <img src="media/church_pyramid.jpg" alt="Church, colorized by pyramid alignment">
+        <figcaption>church<span class="offs">g (4, 25) · r (-4, 58)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/harvesters_pyramid.jpg" alt="Harvesters, colorized by pyramid alignment">
+        <figcaption>harvesters<span class="offs">g (17, 60) · r (13, 124)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/icon_pyramid.jpg" alt="Icon, colorized by pyramid alignment">
+        <figcaption>icon<span class="offs">g (16, 40) · r (23, 90)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/ilemselga_pyramid.jpg" alt="Ilemselga, colorized by pyramid alignment">
+        <figcaption>ilemselga<span class="offs">g (7, 40) · r (11, 131)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/melons_pyramid.jpg" alt="Melons, colorized by pyramid alignment">
+        <figcaption>melons<span class="offs">g (7, 79) · r (11, 176)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/religous_painting_pyramid.jpg" alt="Religious painting, colorized by pyramid alignment">
+        <figcaption>religous_painting<span class="offs">g (7, 30) · r (6, 70)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/self_portrait_pyramid.jpg" alt="Self portrait, colorized by pyramid alignment">
+        <figcaption>self_portrait<span class="offs">g (30, 79) · r (37, 176)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/siren_pyramid.jpg" alt="Siren, colorized by pyramid alignment">
+        <figcaption>siren<span class="offs">g (-8, 48) · r (-24, 96)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/three_generations_pyramid.jpg" alt="Three generations, colorized by pyramid alignment">
+        <figcaption>three_generations<span class="offs">g (9, 53) · r (8, 110)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/wharf_pyramid.jpg" alt="Wharf, colorized by pyramid alignment">
+        <figcaption>wharf<span class="offs">g (-8, 15) · r (-17, 83)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/emir_pyramid.jpg" alt="Emir, colorized by pyramid alignment">
+        <figcaption>emir<span class="offs">g (23, 49) · r (40, 107)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/cathedral_pyramid.jpg" alt="Cathedral, colorized by pyramid alignment">
+        <figcaption>cathedral<span class="offs">g (2, 5) · r (3, 12)</span></figcaption>
+      </figure>
+    </div>
+
+    <!-- ══ DELIVERABLE 3 ═════════════════════════════════════════════
+         Three plates chosen from the Library of Congress collection.
+         Worth saying why you picked them and linking the LOC pages. -->
+    <h2>Prokudin-Gorskii Extras</h2>
+    <p></p>
+
+    <div class="row3">
+      <figure>
+        <img src="media/library_pyramid.jpg" alt="Library interior, colorized by pyramid alignment">
+        <figcaption>library<span class="offs">g (0, 3) · r (-3, 6)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/railway_pyramid.jpg" alt="Railway track through forest, colorized by pyramid alignment">
+        <figcaption>railway<span class="offs">g (1, 2) · r (1, 7)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/schooner_pyramid.jpg" alt="Schooner on a river at dusk, colorized by pyramid alignment">
+        <figcaption>schooner<span class="offs">g (2, 3) · r (3, 11)</span></figcaption>
+      </figure>
+    </div>
+
+    <!-- ══ DELIVERABLE 4 ═════════════════════════════════════════════
+         Which images failed and why. The emir case belongs here: matching
+         on raw pixel values fails when the channels differ in brightness. -->
+    <h2>Failures</h2>
+    <p>The Emir picture kept failing to align because the pixel brightness in each channel was completely different. 
+      This picture required preprocessing to align. 
+    </p>
+
+    <!-- ══ DELIVERABLE 5 ═════════════════════════════════════════════
+         Bells and whistles, each with a before/after pair. Duplicate the
+         row2 block below for each one. -->
+    <h2>Bells &amp; whistles</h2>
+
+    <!-- ▼ what the gradient feature is, why matching on edge strength beats
+         matching on raw brightness, and what it fixed -->
+    <h3>Matching on edges instead of pixel values</h3>
+    <p>Because the Emir picture had very different brightness in each channel, I needed to keep track of the edges of the pictures instead. 
+      I did this by taking the difference between pixels left and right of it for the vertical edges and the pixels up and down of it for the horizontal edges. 
+      Then I took the L2 norm to get an image that was very bright when there was a high difference in brightness and dark when there wasn't. 
+      This doesn't work for the edges since I used np.roll, but the edges weren't used for the similarity scoring anyway. 
+      By using the edges instead of the brightness of each pixel I was able to circumvent this issue. 
+    </p>
+
+    <div class="row2">
+      <figure>
+        <img src="media/emir_pixels.jpg" alt="Emir aligned by matching raw pixel values; the red channel is badly misplaced">
+        <figcaption>before · raw pixel values<span class="offs">g (22, 49) · r (-153, -287)</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/emir_pyramid.jpg" alt="Emir aligned by matching gradient magnitude; all three channels line up">
+        <figcaption>after · edge preprocessing<span class="offs">g (23, 49) · r (40, 107)</span></figcaption>
+      </figure>
+    </div>
+
+    <!-- ▼ duplicate the block above for any further bells and whistles -->
+
   </main>
 
   <footer>
