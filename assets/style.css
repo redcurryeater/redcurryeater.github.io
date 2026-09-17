@@ -426,7 +426,7 @@ footer a:hover { color: var(--red); }
   color: rgba(227, 215, 174, .85);
 }
 
-.writeup p { margin: 0 0 14px; color: rgba(227, 215, 174, .78); }
+.writeup p { margin: 0 0 14px; font-size: 13.5px; color: rgba(227, 215, 174, .78); }
 
 .writeup a {
   color: var(--cream);
@@ -490,4 +490,44 @@ footer a:hover { color: var(--red); }
 @media (prefers-reduced-motion: reduce) {
   body::after { animation: none; }
   .pic, .pic::before, .num, .status, .mark path { transition: none; }
+}
+
+/* offsets table */
+.writeup table {
+  width: 100%;
+  margin: 24px 0;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.writeup th,
+.writeup td {
+  padding: 7px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(227, 215, 174, .14);
+}
+
+.writeup th {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--cream-dim);
+  border-bottom-color: rgba(227, 215, 174, .3);
+}
+
+.writeup td { color: rgba(227, 215, 174, .78); }
+.writeup td:first-child { color: var(--cream); }
+.writeup tbody tr:hover td { background: rgba(227, 215, 174, .04); }
+
+.writeup .tablewrap { overflow-x: auto; }
+
+/* offsets under a figure caption — a step down from the title */
+.writeup figcaption .offs {
+  display: block;
+  margin-top: 3px;
+  font-size: 9px;
+  letter-spacing: .1em;
+  text-transform: none;
+  color: rgba(227, 215, 174, .45);
 }

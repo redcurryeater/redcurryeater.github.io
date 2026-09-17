@@ -8,3 +8,10 @@
 # uv environment (recreate with `uv sync`); uv.lock IS committed
 .venv/
 __pycache__/
+
+# project code + built submissions — the course requires that code go to
+# Gradescope only, never hosted publicly. These live on disk, never in the repo.
+submission/
+
+# tripwire: no future project should put code back inside a published folder
+[0-9]/tools/
