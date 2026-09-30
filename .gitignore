@@ -1,17 +1,10 @@
-# raw phone imports — GIFs/stills made from these go in the project media folders instead
-0/photos/
+# tripwire: project code and source media belong in the private cs180 repo,
+# never inside a published folder
+180/[0-9]/tools/
+180/[0-9]/data/
+180/[0-9]/photos/
+*.py
 
-# course-provided source images for Project 1 (762 MB of .tif plate scans;
-# re-downloadable from the course site). Only finished outputs go in 1/media/.
-1/data/
-
-# uv environment (recreate with `uv sync`); uv.lock IS committed
 .venv/
 __pycache__/
-
-# project code + built submissions — the course requires that code go to
-# Gradescope only, never hosted publicly. These live on disk, never in the repo.
-submission/
-
-# tripwire: no future project should put code back inside a published folder
-[0-9]/tools/
+.DS_Store
