@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Project 2 · CS180 · Julien Schweighofer</title>
-<meta name="description" content="Project 2 — CS180 (UC Berkeley, Fall 2026), Julien Schweighofer.">
+<meta name="description" content="Project 2 — Fun with Filters and Frequencies. CS180 (UC Berkeley, Fall 2026), Julien Schweighofer.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%230e0d0b'/%3E%3Crect x='5' y='9' width='22' height='15' rx='2' fill='none' stroke='%23e3d7ae' stroke-width='2'/%3E%3Ccircle cx='25.5' cy='7' r='3.6' fill='%23e2382f'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,31 +24,607 @@
 
   <a class="back" href="../">← Contact sheet</a>
 
-  <p class="framemeta">Frame 02 · Status: <b>Undeveloped</b></p>
+  <p class="framemeta">Frame 02 · Status: <b>Developed</b></p>
   <h2 class="frametitle">Project 2</h2>
+  <p class="subtitle">Fun with filters and frequencies</p>
 
-  <!-- ▼ Placeholder — delete this whole <section> when the writeup below is ready. -->
-  <section class="plate">
-    <span class="rail" aria-hidden="true"></span>
-    <div class="pic">
-      <div class="dev">
-        <p class="devline">This frame hasn't been developed yet.</p>
-        <p class="devsub">The writeup will appear here once the project is released.</p>
-      </div>
-    </div>
-    <span class="edgeline" aria-hidden="true"><b>▸ 02</b><span>TX&nbsp;5063</span></span>
-    <span class="rail" aria-hidden="true"></span>
-  </section>
+  <!-- ═══════════════════════════════════════════════════════════════
+       HOW THIS PAGE WORKS
 
-  <!-- ▼ Project writeup goes here. Suggested shapes:
-    <h2>Overview</h2>
-    <p>…</p>
-    <figure>
-      <img src="media/result.jpg" alt="Describe the result">
-      <figcaption>Fig. 1 — caption</figcaption>
-    </figure>
-  -->
+       · Every <p> and <figcaption> below is an empty slot — write into
+         them and nothing else has to change.
+       · A <figure class="pending"> is a deliverable whose image hasn't
+         been made yet. To fill one: drop the file into media/, uncomment
+         the <img> inside and point its src at the file, delete the
+         <div class="pendingbox">, and drop "pending" from the <figure>.
+       · Grid helpers: class="row2" / "row3" / "row4" on a wrapping div.
+         class="wide" on a figure lets it run the full sheet width.
+       · class="fig-narrow" on a figure centres a small image.
+       ═══════════════════════════════════════════════════════════════ -->
+
   <main class="writeup">
+
+    <h2>Overview</h2>
+    <p></p>
+
+
+    <!-- ╔═══════════════════════════════════════════════════════════╗
+         ║  PART 1 — FILTERS AND EDGES                               ║
+         ╚═══════════════════════════════════════════════════════════╝ -->
+
+    <p class="part">Part 1 · Filters and edges</p>
+
+    <!-- ══ 1.1 ═══════════════════════════════════════════════════════
+         Correct convolution in numpy only; compared against
+         scipy.signal.convolve2d on runtime and on boundary handling. -->
+    <h2>1.1 · Convolutions from scratch</h2>
+    <p></p>
+
+    <h3>The two implementations</h3>
+    <p></p>
+
+    <!-- drop the "open" attribute on either <details> to have it start collapsed -->
+    <div class="codepair">
+      <details class="src" open>
+        <summary>convolute_4 — four loops</summary>
+<pre><code>def convolute_4(input, kernel, padding="same"):
+
+    # check if kernel is 2D and odd in both dims (so there is a center pixel)
+    if kernel.ndim != 2:
+        raise ValueError(f"kernel must be 2D, got shape {kernel.shape}")
+    if any(s % 2 == 0 for s in kernel.shape):
+        raise ValueError(f"kernel dims must be odd, got shape {kernel.shape}")
+
+    kh, kw = kernel.shape
+
+    #assigning padding size, separately per axis
+    if padding == "same":
+        ph, pw = (kh - 1)//2, (kw - 1)//2
+    elif padding == "full":
+        ph, pw = kh - 1, kw - 1
+    else:
+        raise ValueError(f"padding must be 'same' or 'full', got {padding!r}")
+
+    k_flip = np.flip(kernel, (0,1))
+    in_padded = np.pad(input, ((ph, ph), (pw, pw)), constant_values=0)
+    H, W = input.shape
+    out_h = H + 2 * ph - kh + 1
+    out_w = W + 2 * pw - kw + 1
+    out = np.zeros((out_h, out_w), dtype=float)
+
+    # offsets run -half .. +half around the window center, one half per axis
+    half_h, half_w = (kh - 1)//2, (kw - 1)//2
+
+    for m in range(half_h, in_padded.shape[0] - half_h):
+        for n in range(half_w, in_padded.shape[1] - half_w):
+            for i in range(-half_h, half_h + 1):
+                for j in range(-half_w, half_w + 1):
+                    out[m - half_h, n - half_w] += in_padded[m + i,n + j] * k_flip[i + half_h, j + half_w]
+
+    return out</code></pre>
+      </details>
+      <details class="src" open>
+        <summary>convolute_2 — two loops</summary>
+<pre><code>def convolute_2(input, kernel, padding="same"):
+
+    # check if kernel is 2D and odd in both dims (so there is a center pixel)
+    if kernel.ndim != 2:
+        raise ValueError(f"kernel must be 2D, got shape {kernel.shape}")
+    if any(s % 2 == 0 for s in kernel.shape):
+        raise ValueError(f"kernel dims must be odd, got shape {kernel.shape}")
+
+    kh, kw = kernel.shape
+
+    #assigning padding size, separately per axis
+    if padding == "same":
+        ph, pw = (kh - 1)//2, (kw - 1)//2
+    elif padding == "full":
+        ph, pw = kh - 1, kw - 1
+    else:
+        raise ValueError(f"padding must be 'same' or 'full', got {padding!r}")
+
+    k_flip = np.flip(kernel, (0,1))
+    in_padded = np.pad(input, ((ph, ph), (pw, pw)), constant_values=0)
+    H, W = input.shape
+    out_h = H + 2 * ph - kh + 1
+    out_w = W + 2 * pw - kw + 1
+    out = np.zeros((out_h, out_w), dtype=float)
+
+    # offsets run -half .. +half around the window center, one half per axis
+    half_h, half_w = (kh - 1)//2, (kw - 1)//2
+
+    for m in range(in_padded.shape[0] - kh + 1):
+        for n in range(in_padded.shape[1] - kw + 1):
+            patch = in_padded[m: m + kh, n: n + kw]
+            out[m,n] = np.sum(patch * k_flip)
+
+    return out</code></pre>
+      </details>
+    </div>
+    <p></p>
+
+    <h3>Runtime</h3>
+    <p>The 4 for loops is in n^4 runtime where n is a dimension of the image because of the 4 for loops. 
+      The 2 for loops is a vectorized version but it is still slow on big images. The builtin scipy convolve2d
+      is much faster taking only seconds to convolve big images. 
+    </p>
+
+    <h3>Boundaries</h3>
+    <p> With no padding, convolution shrinks an image because the kernel would align its ediges to the image edges. 
+      I implemented two sizes of padding one that keeps the image the same size and another that keeps all possible kernel
+      and image overlap. 
+    </p>
+
+    <h3>Results</h3>
+    <div class="row2">
+      <figure>
+        <img src="media/cameraman.png" alt="The cameraman image, unfiltered">
+        <figcaption>cameraman<span class="offs">original</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/cameraman_box9.png" alt="Cameraman convolved with a 9x9 box filter">
+        <figcaption>cameraman<span class="offs">9×9 box filter</span></figcaption>
+      </figure>
+    </div>
+
+    <div class="row2">
+      <figure>
+        <img src="media/selfie.jpg" alt="A selfie, unfiltered">
+        <figcaption>selfie<span class="offs">original</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/selfie_box9.png" alt="The selfie convolved with a 9x9 box filter">
+        <figcaption>selfie<span class="offs">9×9 box filter</span></figcaption>
+      </figure>
+    </div>
+
+
+    <!-- ══ 1.2 ═══════════════════════════════════════════════════════
+         Partial derivatives, gradient magnitude, binarized edges, and
+         the justification for where the threshold landed. -->
+    <h2>1.2 · Finite difference operator</h2>
+    <p></p>
+
+    <div class="row4">
+      <figure>
+        <img src="media/cameraman_dx.png" alt="Cameraman, partial derivative in x">
+        <figcaption>∂/∂x<span class="offs">cameraman ∗ D<sub>x</sub></span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/cameraman_dy.png" alt="Cameraman, partial derivative in y">
+        <figcaption>∂/∂y<span class="offs">cameraman ∗ D<sub>y</sub></span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/cameraman_gradmag.png" alt="Cameraman, gradient magnitude">
+        <figcaption>gradient magnitude</figcaption>
+      </figure>
+      <figure>
+        <img src="media/cameraman_edges.png" alt="Cameraman, binarized edge image">
+        <figcaption>binarized edges<span class="offs">threshold = 75</span></figcaption>
+      </figure>
+    </div>
+
+    <div class="row4">
+      <figure>
+        <img src="media/selfie_dx.png" alt="Selfie, partial derivative in x">
+        <figcaption>∂/∂x<span class="offs">selfie ∗ D<sub>x</sub></span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/selfie_dy.png" alt="Selfie, partial derivative in y">
+        <figcaption>∂/∂y<span class="offs">selfie ∗ D<sub>y</sub></span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/selfie_gradmag.png" alt="Selfie, gradient magnitude">
+        <figcaption>gradient magnitude</figcaption>
+      </figure>
+      <figure>
+        <img src="media/selfie_edges.png" alt="Selfie, binarized edge image">
+        <figcaption>binarized edges<span class="offs">threshold = 75</span></figcaption>
+      </figure>
+    </div>
+
+    <h3>Choosing the threshold</h3>
+    <p> I chose the threshold that best captured the edges while keeping the noise to a minimum. Once the threshold became 
+      too low, there were bits of grass that started appearing as edges in the cameraman photo, but if the threshold was too high the hair in the selfie
+      stopped being considered edges, so I tried to balance the two. 
+    </p>
+
+
+    <!-- ══ 1.3 ═══════════════════════════════════════════════════════
+         Gaussian from cv2.getGaussianKernel, the two DoG filters, the
+         filters themselves visualized, and both routes compared. -->
+    <h2>1.3 · Derivative of Gaussian filter</h2>
+    <p></p>
+
+    <h3>The filters</h3>
+    <p>A clever way of combining the the Dx and Dy from above with the gaussian blur.</p>
+
+    <div class="row3">
+      <figure>
+        <img class="kernel" src="media/filter_gaussian.png" alt="The 9 by 9 Gaussian kernel, shown as an image">
+        <figcaption>Gaussian<span class="offs">9×9, outer product</span></figcaption>
+      </figure>
+      <figure>
+        <img class="kernel" src="media/filter_dog_dx.png" alt="The x derivative of Gaussian kernel, shown as an image">
+        <figcaption>DoG<sub>x</sub><span class="offs">Gaussian ∗ D<sub>x</sub></span></figcaption>
+      </figure>
+      <figure>
+        <img class="kernel" src="media/filter_dog_dy.png" alt="The y derivative of Gaussian kernel, shown as an image">
+        <figcaption>DoG<sub>y</sub><span class="offs">Gaussian ∗ D<sub>y</sub></span></figcaption>
+      </figure>
+    </div>
+
+    <h3>Applied to the cameraman</h3>
+    <p></p>
+
+    <div class="row4">
+      <figure>
+        <img src="media/cameraman_dog_dx.png" alt="Cameraman convolved with the x derivative of Gaussian">
+        <figcaption>∂/∂x<span class="offs">DoG<sub>x</sub></span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/cameraman_dog_dy.png" alt="Cameraman convolved with the y derivative of Gaussian">
+        <figcaption>∂/∂y<span class="offs">DoG<sub>y</sub></span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/cameraman_dog_gradmag.png" alt="Cameraman, gradient magnitude from the derivative of Gaussian filters">
+        <figcaption>gradient magnitude</figcaption>
+      </figure>
+      <figure>
+        <img src="media/cameraman_dog_edges.png" alt="Cameraman edges from the derivative of Gaussian filters">
+        <figcaption>binarized edges<span class="offs">threshold = 20</span></figcaption>
+      </figure>
+    </div>
+
+    <div class="row4">
+      <figure>
+        <img src="media/selfie_dog_dx.png" alt="Selfie convolved with the x derivative of Gaussian">
+        <figcaption>∂/∂x<span class="offs">selfie · DoG<sub>x</sub></span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/selfie_dog_dy.png" alt="Selfie convolved with the y derivative of Gaussian">
+        <figcaption>∂/∂y<span class="offs">selfie · DoG<sub>y</sub></span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/selfie_dog_gradmag.png" alt="Selfie, gradient magnitude from the derivative of Gaussian filters">
+        <figcaption>gradient magnitude</figcaption>
+      </figure>
+      <figure>
+        <img src="media/selfie_dog_edges.png" alt="Selfie edges from the derivative of Gaussian filters">
+        <figcaption>binarized edges<span class="offs">threshold = 20</span></figcaption>
+      </figure>
+    </div>
+
+    <h3>Against the finite difference method</h3>
+    <p>Because the kernel is larger than the 3 by 1 finite difference arrays, the edges are larger and thus more robust to outliers. 
+      They are able to better filter out the noise and reliably pick up the edges. 
+    </p>
+
+    <div class="row2">
+      <figure>
+        <img src="media/cameraman_edges.png" alt="Cameraman edges from plain finite differences">
+        <figcaption>finite difference<span class="offs">threshold = 75</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/cameraman_dog_edges.png" alt="Cameraman edges from derivative of Gaussian">
+        <figcaption>derivative of Gaussian<span class="offs">threshold = 20</span></figcaption>
+      </figure>
+    </div>
+
+    <div class="row2">
+      <figure>
+        <img src="media/selfie_edges.png" alt="Selfie edges from plain finite differences">
+        <figcaption>selfie · finite difference<span class="offs">threshold = 75</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/selfie_dog_edges.png" alt="Selfie edges from derivative of Gaussian">
+        <figcaption>selfie · derivative of Gaussian<span class="offs">threshold = 20</span></figcaption>
+      </figure>
+    </div>
+
+
+    <!-- ╔═══════════════════════════════════════════════════════════╗
+         ║  PART 2 — APPLICATIONS                                    ║
+         ╚═══════════════════════════════════════════════════════════╝ -->
+
+    <p class="part">Part 2 · Applications</p>
+
+    <!-- ══ 2.1 ═══════════════════════════════════════════════════════
+         Unsharp masking: what the blur removes, what the difference
+         keeps, and what adding it back does. Taj + one of your own,
+         plus a sweep over the sharpening amount. -->
+    <h2>2.1 · Image sharpening</h2>
+    <p></p>
+
+    <h3>Taj Mahal</h3>
+    <div class="row4">
+      <figure>
+        <img src="media/taj.jpg" alt="The Taj Mahal, original">
+        <figcaption>original</figcaption>
+      </figure>
+      <figure>
+        <img src="media/taj_blurred.jpg" alt="The Taj Mahal, Gaussian blurred">
+        <figcaption>blurred<span class="offs">low frequencies</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/taj_detail.png" alt="The high frequency detail of the Taj Mahal">
+        <figcaption>detail<span class="offs">original − blurred, +128</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/taj_sharpened.jpg" alt="The Taj Mahal, sharpened">
+        <figcaption>sharpened<span class="offs">α = 1</span></figcaption>
+      </figure>
+    </div>
+
+    <h3>Varying the sharpening amount</h3>
+    <p>It seems like the edges and sharp contrast areas are being accentuated as the sharpness increases.</p>
+
+    <div class="row4">
+      <figure>
+        <img src="media/taj.jpg" alt="The Taj Mahal, unsharpened">
+        <figcaption>α = 0<span class="offs">original</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/taj_sharp_a05.jpg" alt="The Taj Mahal sharpened with alpha one half">
+        <figcaption>α = 0.5</figcaption>
+      </figure>
+      <figure>
+        <img src="media/taj_sharpened.jpg" alt="The Taj Mahal sharpened with alpha one">
+        <figcaption>α = 1</figcaption>
+      </figure>
+      <figure>
+        <img src="media/taj_sharp_a2.jpg" alt="The Taj Mahal sharpened with alpha two">
+        <figcaption>α = 2</figcaption>
+      </figure>
+    </div>
+
+    <h3>An image of my own</h3>
+    <p></p>
+
+    <div class="row4">
+      <figure>
+        <img src="media/sam.jpg" alt="Sam, original">
+        <figcaption>original</figcaption>
+      </figure>
+      <figure>
+        <img src="media/sam_blurred.jpg" alt="Sam, Gaussian blurred">
+        <figcaption>blurred<span class="offs">low frequencies</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/sam_detail.jpg" alt="The high frequency detail of the Sam image">
+        <figcaption>detail<span class="offs">original − blurred, +128</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/sam_sharpened.jpg" alt="Sam, sharpened">
+        <figcaption>sharpened<span class="offs">α = 2</span></figcaption>
+      </figure>
+    </div>
+
+    <!-- optional: blur a sharp image, then try to sharpen it back -->
+    <h3>Sharpening a blurred image back</h3>
+    <p>I don't see a difference between the original and resharpened image. However, the blur is lossy 
+      and at a higher blur there would be differences in the image.    </p>
+
+    <div class="row3">
+      <figure>
+        <img src="media/hills.jpg" alt="A hillside trail, the sharp original">
+        <figcaption>original<span class="offs">sharp</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/hills_blurred.jpg" alt="The same trail, Gaussian blurred">
+        <figcaption>blurred</figcaption>
+      </figure>
+      <figure>
+        <img src="media/hills_resharpened.jpg" alt="The blurred trail put back through the unsharp mask">
+        <figcaption>re-sharpened<span class="offs">α = 3</span></figcaption>
+      </figure>
+    </div>
+
+
+    <!-- ══ 2.2 ═══════════════════════════════════════════════════════
+         Three hybrids. The first one is shown end to end: originals,
+         aligned pair, the two spectra, both filtered halves, the
+         cutoff choice, and the result. The other two are before/after. -->
+    <h2>2.2 · Hybrid images</h2>
+    <p></p>
+
+    <h3>The full process · Tiffany + cat</h3>
+    <p>  
+    </p>
+
+    <div class="row2">
+      <figure>
+        <img src="media/tiffany.jpg" alt="Tiffany, the high frequency input">
+        <figcaption>tiffany<span class="offs">high frequencies · σ₁ = 6</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/cat.jpg" alt="The cat, the low frequency input">
+        <figcaption>cat<span class="offs">low frequencies · σ₂ = 8</span></figcaption>
+      </figure>
+    </div>
+
+    <h3>Frequency analysis</h3>
+    <p></p>
+
+    <figure class="wide">
+      <img src="media/fourier_tiffany_cat.png" alt="Inputs, filtered halves and the hybrid, each above its log magnitude Fourier transform">
+      <figcaption>top: the aligned inputs, their filtered halves, the hybrid · bottom: log |FFT| of each<span class="offs">σ₁ = 6 (high pass) · σ₂ = 8 (low pass)</span></figcaption>
+    </figure>
+
+    <h3>Choosing the cutoffs</h3>
+    <p>This image was hard to get right because the cat has a black streak of fur on its face so it made it hard to 
+      see the girls face. I had to loosen the frequency filter to get the image to look like her up close which compromised the 
+      cat further away.</p>
+
+    <figure class="fig-narrow withtiny">
+      <div class="tinyrow">
+        <img src="media/hybrid_tiffany_cat.jpg" alt="Hybrid image of Tiffany and the cat">
+        <img class="tiny" style="width:35px" src="media/hybrid_tiffany_cat.jpg" alt="The same hybrid at one sixteenth scale, where only the cat reads">
+      </div>
+      <figcaption>tiffany + cat<span class="offs">σ₁ = 6 · σ₂ = 8 · right: 1/16 scale</span></figcaption>
+    </figure>
+
+    <h3>Derek + Nutmeg</h3>
+    <p></p>
+
+    <div class="row3">
+      <figure>
+        <img src="media/nutmeg.jpg" alt="Nutmeg the cat, the high frequency input">
+        <figcaption>nutmeg<span class="offs">high frequencies · σ₁ = 6</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/derek.jpg" alt="Derek, the low frequency input">
+        <figcaption>derek<span class="offs">low frequencies · σ₂ = 8</span></figcaption>
+      </figure>
+      <figure class="withtiny">
+        <div class="tinyrow">
+          <img src="media/hybrid_derek_nutmeg.jpg" alt="Hybrid image of Derek and Nutmeg">
+          <img class="tiny" style="width:46px" src="media/hybrid_derek_nutmeg.jpg" alt="The same hybrid at one sixteenth scale, where only Derek reads">
+        </div>
+        <figcaption>hybrid<span class="offs">right: 1/16 scale</span></figcaption>
+      </figure>
+    </div>
+
+    <h3>Egg + Julien</h3>
+    <p> I drew a face on the egg which kind of looks like my face if you squint enough.</p>
+
+    <div class="row3">
+      <figure>
+        <img src="media/egg.jpg" alt="An egg, the high frequency input">
+        <figcaption>egg<span class="offs">high frequencies · σ₁ = 3</span></figcaption>
+      </figure>
+      <figure>
+        <img src="media/julien.jpg" alt="Julien, the low frequency input">
+        <figcaption>julien<span class="offs">low frequencies · σ₂ = 8</span></figcaption>
+      </figure>
+      <figure class="withtiny">
+        <div class="tinyrow">
+          <img src="media/hybrid_egg_julien.jpg" alt="Hybrid image of the egg and Julien">
+          <img class="tiny" style="width:31px" src="media/hybrid_egg_julien.jpg" alt="The same hybrid at one sixteenth scale, where only Julien reads">
+        </div>
+        <figcaption>hybrid<span class="offs">right: 1/16 scale</span></figcaption>
+      </figure>
+    </div>
+
+    <!-- ══ 2.3 ═══════════════════════════════════════════════════════
+         Gaussian and Laplacian stacks on the apple and the orange,
+         then the Figure 3.42 grid rebuilt from them. -->
+    <h2>2.3 · Gaussian and Laplacian stacks</h2>
+    <p></p>
+
+    <div class="row2">
+      <figure>
+        <img src="media/apple.jpg" alt="The apple">
+        <figcaption>apple</figcaption>
+      </figure>
+      <figure>
+        <img src="media/orange.jpg" alt="The orange">
+        <figcaption>orange</figcaption>
+      </figure>
+    </div>
+
+    <h3>The stacks</h3>
+    <p> Its the blurs and the difference in blurs!</p>
+
+    <figure class="wide">
+      <img src="media/apple_gaussian_stack.png" alt="A row showing the apple's Gaussian stack, five levels left to right">
+      <figcaption>Gaussian stack · apple<span class="offs">levels 0 … 4, left to right</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/apple_laplacian_stack.png" alt="A row showing the apple's Laplacian stack, five levels left to right">
+      <figcaption>Laplacian stack · apple<span class="offs">levels 0 … 4, left to right</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/orange_gaussian_stack.png" alt="A row showing the orange's Gaussian stack, five levels left to right">
+      <figcaption>Gaussian stack · orange<span class="offs">levels 0 … 4, left to right</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/orange_laplacian_stack.png" alt="A row showing the orange's Laplacian stack, five levels left to right">
+      <figcaption>Laplacian stack · orange<span class="offs">levels 0 … 4, left to right</span></figcaption>
+    </figure>
+
+    <h3>Figure 3.42, (a) through (l)</h3>
+    <p></p>
+
+    <figure class="wide">
+      <img src="media/oraple_stacks.png" alt="Per level Laplacian contributions of the apple and the orange, their sum, and the collapsed blend">
+      <figcaption>rows: levels 0, 2, 4 and the collapse · columns: apple, orange, combined<span class="offs">σ = 2 · 5 levels · vertical mask</span></figcaption>
+    </figure>
+
+
+    <!-- ══ 2.4 ═══════════════════════════════════════════════════════
+         Blends of my own. One of them uses an irregular mask rather
+         than a straight seam. The oraple itself is in 2.3 above. -->
+    <h2>2.4 · Multiresolution blending</h2>
+    <p></p>
+
+    <h3>Jellyfish in the sky · irregular mask</h3>
+    <p>I wanted the jellyfish to fly. I made a oval and fethered map and then color corrected the jelly fish so it would blend into the sky. </p>
+
+    <div class="row2">
+      <figure>
+        <img src="media/jellyfish.jpg" alt="A jellyfish in an aquarium tank">
+        <figcaption>jellyfish</figcaption>
+      </figure>
+      <figure>
+        <img src="media/snowy_mountains.jpg" alt="Snowy mountains under an open sky">
+        <figcaption>snowy mountains</figcaption>
+      </figure>
+    </div>
+
+    <figure>
+      <img src="media/jellyfish_sky.jpg" alt="The jellyfish blended into the sky above the mountains">
+      <figcaption>jellyfish in the sky<span class="offs">σ = 2 · 5 levels · oval mask, feather 6</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/jellyfish_stacks.png" alt="Per level Laplacian contributions of the jellyfish and the mountains, their sum, and the collapsed blend">
+      <figcaption>rows: levels 0, 2, 4 and the collapse · columns: jellyfish, mountains, combined</figcaption>
+    </figure>
+
+    <h3>Lake over beach · horizontal seam</h3>
+    <p>This one didnt turn out as well because of the differences in color.</p>
+
+    <div class="row2">
+      <figure>
+        <img src="media/lake.jpg" alt="A lake at daytime">
+        <figcaption>lake</figcaption>
+      </figure>
+      <figure>
+        <img src="media/beach_night.jpg" alt="A beach at night">
+        <figcaption>beach at night</figcaption>
+      </figure>
+    </div>
+
+    <figure class="fig-narrow">
+      <img src="media/lake_over_beach.jpg" alt="The lake stacked over the night beach, blended across the seam">
+      <figcaption>lake over beach<span class="offs">σ = 2 · 6 levels · horizontal seam</span></figcaption>
+    </figure>
+
+    <h3>Doubled shoreline</h3>
+    <p>I am my own friend</p>
+
+    <div class="row2">
+      <figure>
+        <img src="media/river.jpg" alt="A river">
+        <figcaption>river</figcaption>
+      </figure>
+      <figure>
+        <img src="media/river_double.jpg" alt="The river blended with a shifted copy of itself">
+        <figcaption>river, doubled<span class="offs">σ = 2 · 6 levels · seam at row 390, feather 8</span></figcaption>
+      </figure>
+    </div>
+
+
+    <h2>Takeaways</h2>
+    <p>Image sizing and dimensions are key to manipulating images. Being meticulous in calculating padding and 
+      matrix manipulations is a must when convolving. Until taking this class I had not realized the relations between 
+      frequencies and images. Working with hybrid images showed me that frequencies describe all of the image. 
+    </p>
+
   </main>
 
   <footer>
