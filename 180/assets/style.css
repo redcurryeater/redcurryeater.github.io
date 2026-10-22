@@ -629,6 +629,9 @@ footer a:hover { color: var(--red); }
 
 .writeup li::marker { color: var(--cream-dim); }
 
+/* a math variable inside an uppercased caption keeps its case: t, not T */
+.writeup figcaption var { text-transform: none; }
+
 /* a lettered sub-label inside a caption, for figure-3.42-style panels */
 .writeup figcaption .panel { color: var(--red); }
 
@@ -653,6 +656,10 @@ footer a:hover { color: var(--red); }
 }
 
 .writeup .wide img { width: 100%; max-width: none; }
+
+/* two-panel sheets: narrower than .wide so each panel stays close to
+   the size of a panel in the four-across sheets */
+.writeup .pair img { width: 100%; max-width: 520px; }
 
 /* ——— source listings ——— */
 

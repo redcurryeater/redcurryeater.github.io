@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Project 3 · CS180 · Julien Schweighofer</title>
-<meta name="description" content="Project 3 — CS180 (UC Berkeley, Fall 2026), Julien Schweighofer.">
+<meta name="description" content="Project 3 — The power of flow models, and flow matching from scratch. CS180 (UC Berkeley, Fall 2026), Julien Schweighofer.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%230e0d0b'/%3E%3Crect x='5' y='9' width='22' height='15' rx='2' fill='none' stroke='%23e3d7ae' stroke-width='2'/%3E%3Ccircle cx='25.5' cy='7' r='3.6' fill='%23e2382f'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,31 +24,598 @@
 
   <a class="back" href="../">← Contact sheet</a>
 
-  <p class="framemeta">Frame 03 · Status: <b>Undeveloped</b></p>
+  <p class="framemeta">Frame 03 · Status: <b>Developed</b></p>
   <h2 class="frametitle">Project 3</h2>
+  <p class="subtitle">The power of flow models · flow matching from scratch</p>
 
-  <!-- ▼ Placeholder — delete this whole <section> when the writeup below is ready. -->
-  <section class="plate">
-    <span class="rail" aria-hidden="true"></span>
-    <div class="pic">
-      <div class="dev">
-        <p class="devline">This frame hasn't been developed yet.</p>
-        <p class="devsub">The writeup will appear here once the project is released.</p>
-      </div>
-    </div>
-    <span class="edgeline" aria-hidden="true"><b>▸ 03</b><span>TX&nbsp;5063</span></span>
-    <span class="rail" aria-hidden="true"></span>
-  </section>
-
-  <!-- ▼ Project writeup goes here. Suggested shapes:
-    <h2>Overview</h2>
-    <p>…</p>
-    <figure>
-      <img src="media/result.jpg" alt="Describe the result">
-      <figcaption>Fig. 1 — caption</figcaption>
-    </figure>
-  -->
   <main class="writeup">
+
+    <h2>Overview</h2>
+    <p>Flow models learn a velocity field that carries pure noise to the distribution of real images. In this project we experiment with denoising and generating images, first with a pretrained model (PixNerd) and then with a UNet that I trained from scratch on MNIST.</p>
+
+    <p class="part">Part A · The power of flow models</p>
+
+    <h2>The sampling functions</h2>
+
+    <details class="src">
+      <summary>interpolate · one_step_denoise · euler_sample · cfg_velocity · edit · visual_anagrams · make_hybrids</summary>
+<pre><code>def interpolate(image, noise, t):
+  return (1-t)* noise + t*image
+
+def one_step_denoise(x, t, condition, predict_velocity):
+  v = predict_velocity(x, t, condition)
+  return x + (1-t)*v
+
+@torch.inference_mode()
+def euler_sample(x_start, t_start, step_size, velocity):
+    states = []
+    x = x_start
+    t = t_start
+    states.append((t,x))
+    k = 0
+    while t &lt; 1:
+        k += 1
+        h = min(step_size, 1 - t)
+        x = x + h * velocity(x, t)
+        t += h
+        if k%5 == 0 or t == 1:
+          states.append((t,x))
+    return x, states
+
+def cfg_velocity(x, t, condition, w, predict_velocity, null_condition=''):
+    v = predict_velocity(x, t, condition)
+    null_v = predict_velocity(x, t, null_condition)
+    return v + w * (v - null_v)
+
+def edit(image, noise, t_start, condition, predict_velocity, w=7, step_size=0.02):
+    noisy = interpolate(image, noise, t_start)
+    x, states = euler_sample(noisy, t_start, step_size, lambda x, t: cfg_velocity(x, t, condition, w, predict_velocity, null_condition))
+    return x
+
+def rotate180(x):
+    return torch.flip(x, (-2, -1))
+
+def visual_anagrams(noise, condition_a, condition_b, predict_velocity, w=7, step_size=0.02):
+
+    x, states = euler_sample(noise, 0, step_size, lambda x, t: (cfg_velocity(x, t, condition_a, w, predict_velocity) + rotate180(cfg_velocity(rotate180(x), t, condition_b, w, predict_velocity))) / 2)
+    return x
+
+def lowpass(x, sigma=16.0):
+    kernel = 2 * round(16.5 * x.shape[-1] / 64) + 1
+    return gaussian_blur(x, [kernel, kernel], [sigma, sigma])
+
+def make_hybrids(noise, condition_a, condition_b, predict_velocity, w=7, step_size=0.02):
+    def velocity(x, t):
+        v_a = cfg_velocity(x, t, condition_a, w, predict_velocity)
+        v_b = cfg_velocity(x, t, condition_b, w, predict_velocity)
+        return lowpass(v_a) + v_b - lowpass(v_b)
+
+    x, states = euler_sample(noise, 0, step_size, velocity)
+    return x</code></pre>
+    </details>
+
+    <h2>1.1 · Constructing noisy training inputs</h2>
+    <p>Blending an image with Gaussian noise. t can be thought of as the fraction of the blend that comes from the image; the remaining 1 − t is noise.</p>
+
+    <figure class="wide">
+      <img src="media/parta/1.1_original_and_noisy_t0.25_t0.50_t0.75.jpg" alt="My own photo of rocks at sunset, then the same photo interpolated toward noise at t equals 0.25, 0.50 and 0.75">
+      <figcaption>original · <var>t</var> = 0.25 · <var>t</var> = 0.50 · <var>t</var> = 0.75<span class="offs">x<sub>t</sub> = (1 − t)ε + t·x<sub>1</sub> · one ε reused for all three</span></figcaption>
+    </figure>
+
+    <h2>1.2 · Classical denoising</h2>
+    <p>At each t we divide the noisy image by t to restore the image's brightness, then use a Gaussian blur to try to erase the noise.</p>
+
+    <figure class="pair">
+      <img src="media/parta/1.2_gaussian_blur_t0.25_sigma16.jpg" alt="Noisy input at t equals 0.25 beside its Gaussian blurred version, sigma 16">
+      <figcaption><var>t</var> = 0.25<span class="offs">noisy · G<sub>σ</sub>(x<sub>t</sub> / t), σ = 16</span></figcaption>
+    </figure>
+
+    <figure class="pair">
+      <img src="media/parta/1.2_gaussian_blur_t0.50_sigma8.jpg" alt="Noisy input at t equals 0.50 beside its Gaussian blurred version, sigma 8">
+      <figcaption><var>t</var> = 0.50<span class="offs">noisy · G<sub>σ</sub>(x<sub>t</sub> / t), σ = 8</span></figcaption>
+    </figure>
+
+    <figure class="pair">
+      <img src="media/parta/1.2_gaussian_blur_t0.75_sigma2.jpg" alt="Noisy input at t equals 0.75 beside its Gaussian blurred version, sigma 2">
+      <figcaption><var>t</var> = 0.75<span class="offs">noisy · G<sub>σ</sub>(x<sub>t</sub> / t), σ = 2</span></figcaption>
+    </figure>
+
+    <h3>Choosing the blur strength</h3>
+    <p>For each t, I tried σ = 1, 2, 4, 8 and 16 and kept the one whose blurred result had the lowest mean squared error against the original image.</p>
+
+    <h2>1.3 · One-step denoising</h2>
+    <p>Using one-step denoising, the picture is somewhat recovered. However, the smaller details are lost, since the model is estimating the average of all the original images that could have produced the noisy input. The noisier the input, the blurrier the result.</p>
+
+    <figure class="wide">
+      <img src="media/parta/1.3_one_step_denoise_t0.25.jpg" alt="Original, noisy input at t equals 0.25, and the one-step flow estimate">
+      <figcaption><var>t</var> = 0.25<span class="offs">original · noisy · x<sub>t</sub> + (1 − t)·v<sub>θ</sub></span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/parta/1.3_one_step_denoise_t0.50.jpg" alt="Original, noisy input at t equals 0.50, and the one-step flow estimate">
+      <figcaption><var>t</var> = 0.50<span class="offs">original · noisy · x<sub>t</sub> + (1 − t)·v<sub>θ</sub></span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/parta/1.3_one_step_denoise_t0.75.jpg" alt="Original, noisy input at t equals 0.75, and the one-step flow estimate">
+      <figcaption><var>t</var> = 0.75<span class="offs">original · noisy · x<sub>t</sub> + (1 − t)·v<sub>θ</sub></span></figcaption>
+    </figure>
+
+    <h2>1.4 · Visualizing velocity</h2>
+    <p>These visuals show the predicted change to the noisy image, (1 − t)v<sub>θ</sub>, vs. the ground-truth change x<sub>1</sub> − x<sub>t</sub>, the difference between the original and the noisy image. The error image is the RMS, over the RGB channels, of the difference between the predicted and ground-truth updates.</p>
+
+    <figure class="fig-narrow">
+      <img src="media/parta/1.4_original_image.jpg" alt="The original photo of rocks at sunset">
+      <figcaption>original image</figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/parta/1.4_velocity_t0.25.jpg" alt="At t equals 0.25: the noisy image, the predicted update, the ground truth update, and the error heatmap">
+      <figcaption><var>t</var> = 0.25<span class="offs">noisy · predicted (1 − t)v<sub>θ</sub> · ground truth (1 − t)v<sub>gt</sub> · error (RGB RMS)</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/parta/1.4_velocity_t0.50.jpg" alt="At t equals 0.50: the noisy image, the predicted update, the ground truth update, and the error heatmap">
+      <figcaption><var>t</var> = 0.50<span class="offs">noisy · predicted (1 − t)v<sub>θ</sub> · ground truth (1 − t)v<sub>gt</sub> · error (RGB RMS)</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/parta/1.4_velocity_t0.75.jpg" alt="At t equals 0.75: the noisy image, the predicted update, the ground truth update, and the error heatmap">
+      <figcaption><var>t</var> = 0.75<span class="offs">noisy · predicted (1 − t)v<sub>θ</sub> · ground truth (1 − t)v<sub>gt</sub> · error (RGB RMS) · shared limits 0 – 0.5</span></figcaption>
+    </figure>
+
+    <h3>Where the error lands</h3>
+    <p>The errors in all three examples are in the high frequencies, and they are most prominent in the noisiest image (t = 0.25). This makes sense, since one-step denoising cannot recover fine details.</p>
+
+    <h2>1.5 · Iterative denoising with Euler sampling</h2>
+    <p>Denoising iteratively lets the model fill in details that are plausible for the picture. The image looks sharper and more realistic, but because noising the image is lossy, the final image is not a perfect reconstruction; this can be seen in the person disappearing from the final image.</p>
+
+    <figure class="wide">
+      <img src="media/parta/1.5_euler_trajectory_t0.50_to_1.00.jpg" alt="Euler denoising trajectory from t equals 0.50 to 1.00, shown every fifth update">
+      <figcaption>Euler trajectory<span class="offs">t = 0.50 → 1.00 · h = 0.02 · every fifth update</span></figcaption>
+    </figure>
+
+    <h3>Against the other denoisers</h3>
+
+    <figure class="wide">
+      <img src="media/parta/1.5_comparison_original_blur_onestep_euler.jpg" alt="Original, Gaussian blur, one-step estimate and Euler result, all from the same t equals 0.50 input">
+      <figcaption>original · Gaussian blur · one step · Euler<span class="offs">same noisy input, t = 0.50</span></figcaption>
+    </figure>
+
+    <h2>1.6 · Generating images from noise</h2>
+    <p>These images are generated from pure noise, conditioned on "a high quality photo". The random starting point is why the pictures are different. However, these pictures are malformed and very unrealistic. This is because, without guidance, such a generic prompt only weakly steers the sampling, so the samples spread over a broad range of images, including many implausible ones. This generic 
+      prompt favors generating people. 
+    </p>
+
+    <figure class="wide">
+      <img src="media/parta/1.6_samples_seeds180-184.jpg" alt="Five images sampled from pure noise with the prompt a high quality photo, seeds 180 to 184">
+      <figcaption>conditional samples<span class="offs">"a high quality photo" · t<sub>start</sub> = 0 · seeds 180 – 184</span></figcaption>
+    </figure>
+
+    <h2>2.1 · Classifier-free guidance</h2>
+    <p>To combat the issues from above, we guide the image generation by pushing it further in the direction of the condition. The model predicts one velocity with the prompt and one with an empty prompt, and the guided velocity is v<sub>c</sub> + w(v<sub>c</sub> − v<sub>u</sub>). I used w = 7, which pushes the velocity past the prompted prediction by 7 times the difference between the two.</p>
+
+    <figure class="wide">
+      <img src="media/parta/2.1_cfg_samples_w7_seeds180-184.jpg" alt="Five images sampled with classifier free guidance, w equals 7, from the same seeds as before">
+      <figcaption>CFG samples<span class="offs">"a high quality photo" · w = 7 · seeds 180 – 184</span></figcaption>
+    </figure>
+
+    <h3>With and without guidance</h3>
+    <p>Using guidance allows for more realistic pictures, instead of the malformed and sometimes scary ones above. The downside of guidance is the loss of variety: the higher w is, the more the generated pictures look like each other. This can be seen in the CFG outputs, which are all front-facing portraits of people.</p>
+
+    <h2>3.1 · Image-to-image editing</h2>
+    <p>The noisy images here are reconstructed into realistic-looking images, but they often diverge from the original at high noise levels (small starting times), since not enough of the image is kept. My favorite is the guy holding up a mirror to his face, when the original image is a rocky coastline.</p>
+
+    <h3>Campanile</h3>
+    <figure class="wide">
+      <img src="media/parta/3.1_edit_campanile.jpg" alt="The Campanile, then edits at starting times 0.02, 0.04, 0.06, 0.10, 0.14, 0.25 and 0.50">
+      <figcaption>campanile<span class="offs">"a high quality photo" · t<sub>start</sub> = 0.02 … 0.50 · w = 7</span></figcaption>
+    </figure>
+
+    <h3>Rocks at sunset</h3>
+    <figure class="wide">
+      <img src="media/parta/3.1_edit_own_image1_rocks.jpg" alt="My photo of rocks at sunset, then edits at the seven starting times">
+      <figcaption>my image 1 · rocks<span class="offs">"a high quality photo" · t<sub>start</sub> = 0.02 … 0.50 · w = 7</span></figcaption>
+    </figure>
+
+    <h3>Pool room</h3>
+    <figure class="wide">
+      <img src="media/parta/3.1_edit_own_image2_poolroom.jpg" alt="My photo of a pool room, then edits at the seven starting times">
+      <figcaption>my image 2 · pool room<span class="offs">"a high quality photo" · t<sub>start</sub> = 0.02 … 0.50 · w = 7</span></figcaption>
+    </figure>
+
+    <h3>Editing hand-drawn and web images</h3>
+    <p>My hand-drawn images used very thin pencil strokes, so the noisier ones were reconstructed into blank white canvases or gibberish paperwork.</p>
+
+    <figure class="wide">
+      <img src="media/parta/3.1_web_image_flying_car.jpg" alt="A web image of a flying car, then edits at the seven starting times">
+      <figcaption>web image · flying car<span class="offs">"a high quality photo" · t<sub>start</sub> = 0.02 … 0.50</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/parta/3.1_drawing1_cat.jpg" alt="My drawing of a cat, then edits at the seven starting times">
+      <figcaption>drawing 1 · cat<span class="offs">"a high quality photo" · t<sub>start</sub> = 0.02 … 0.50</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/parta/3.1_drawing2_stick_figures.jpg" alt="My drawing of stick figures, then edits at the seven starting times">
+      <figcaption>drawing 2 · stick figures<span class="offs">"a high quality photo" · t<sub>start</sub> = 0.02 … 0.50</span></figcaption>
+    </figure>
+
+    <h2>3.2 · Text-guided image editing</h2>
+    <p>The noisier the starting image, the more liberties the model can take to guide it in the direction of the prompt; the less noise, the more the result resembles the original image. As the starting time approaches 1, the model can no longer change the bigger details and only changes the smaller ones.</p>
+
+    <h3>Campanile → a talking redwood tree</h3>
+    <figure class="wide">
+      <img src="media/parta/3.2_text_edit_campanile_talking_redwood.jpg" alt="The Campanile edited toward a talking redwood tree at the seven starting times">
+      <figcaption>campanile<span class="offs">prompt: "a talking redwood tree" · t<sub>start</sub> = 0.02 … 0.50</span></figcaption>
+    </figure>
+
+    <h3>Rocks → two mythical creatures</h3>
+    <figure class="wide">
+      <img src="media/parta/3.2_text_edit_rocks_mythical_creatures.jpg" alt="The rocks at sunset edited toward two mythical creatures fighting each other at the seven starting times">
+      <figcaption>my image 1 · rocks<span class="offs">prompt: "two mythical creatures fighting each other" · t<sub>start</sub> = 0.02 … 0.50</span></figcaption>
+    </figure>
+
+    <h3>Pool room → two architects</h3>
+    <figure class="wide">
+      <img src="media/parta/3.2_text_edit_poolroom_architects.jpg" alt="The pool room edited toward two architects planning a city at the seven starting times">
+      <figcaption>my image 2 · pool room<span class="offs">prompt: "two architects planning a city" · t<sub>start</sub> = 0.02 … 0.50</span></figcaption>
+    </figure>
+
+    <h2>3.3 · Visual anagrams</h2>
+    <p>The visual anagrams work by conditioning on two different prompts. At each Euler step, one prompt's velocity is computed on the upright image, while the other's is computed on the image turned upside down and then flipped back, and the two are averaged. This creates the illusion of a different picture when the image is turned upside down.</p>
+
+    <h3>Earth from the ISS / big wave surfer</h3>
+    <figure class="pair">
+      <img src="media/parta/3.3_anagram1_earth_surfer.jpg" alt="One image read upright as the earth seen from the space station, and rotated 180 degrees as a big wave surfer">
+      <figcaption>left: upright · right: rotated 180°<span class="offs">"an oil painting of the earth from the iss" / "an oil of a big wave surfer"</span></figcaption>
+    </figure>
+
+    <h3>Skier / snow fox</h3>
+    <figure class="pair">
+      <img src="media/parta/3.3_anagram2_skier_snowfox.jpg" alt="One image read upright as a skier on a snowy mountain, and rotated 180 degrees as a snow fox in its den">
+      <figcaption>left: upright · right: rotated 180°<span class="offs">"an oil painting of a skiier on a snowy mountain" / "an oil painting of a snowfox in its den"</span></figcaption>
+    </figure>
+
+    <h2>3.4 · Hybrid images</h2>
+    <p>The hybrid images work by computing the velocity for two different prompts and, at each Euler step, combining the low frequencies of one with the high frequencies of the other. This allows the image to look like one thing from up close and another from far away.</p>
+
+    <div class="row2">
+      <figure>
+        <div class="tinyrow">
+          <img src="media/parta/3.4_hybrid1_cat_jungle_full.jpg" alt="Hybrid image: dense jungle foliage up close, a cat's face from far away">
+          <img class="tiny" style="width:64px" src="media/parta/3.4_hybrid1_cat_jungle_64px.png" alt="The same hybrid at 64 pixels">
+        </div>
+        <figcaption>jungle / cat<span class="offs">near: "a lithograph of dense jungle foliage" · far: "a lithograph of a cat's face close up" · right: 64 px</span></figcaption>
+      </figure>
+      <figure>
+        <div class="tinyrow">
+          <img src="media/parta/3.4_hybrid2_bear_forest_full.jpg" alt="Hybrid image: a pine forest up close, a grizzly bear's face from far away">
+          <img class="tiny" style="width:64px" src="media/parta/3.4_hybrid2_bear_forest_64px.png" alt="The same hybrid at 64 pixels, where the bear's face reads">
+        </div>
+        <figcaption>forest / bear<span class="offs">near: "a lithograph of a dense pinpe forest" · far: "a lithograph of a grizzly bear's face" · right: 64 px</span></figcaption>
+      </figure>
+    </div>
+
+    <p class="part">Part B · Flow matching from scratch</p>
+
+    <h2>1.1 · Implementing the UNet</h2>
+
+    <div class="codepair">
+      <details class="src">
+        <summary>The blocks — Conv · DownConv · UpConv · Flatten · Unflatten · ConvBlock · DownBlock · UpBlock</summary>
+<pre><code>class Conv(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 3, 1, 1),
+            nn.BatchNorm2d(out_channels),
+            nn.GELU()
+        )
+
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor:
+        x = self.conv(x)
+        return x
+
+class DownConv(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 3, 2, 1),
+            nn.BatchNorm2d(out_channels),
+            nn.GELU()
+        )
+
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor:
+        x = self.conv(x)
+        return x
+
+class UpConv(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.ConvTranspose2d(in_channels, out_channels, 4, 2, 1),
+            nn.BatchNorm2d(out_channels),
+            nn.GELU()
+        )
+
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor:
+        x = self.conv(x)
+        return x
+
+class Flatten(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.flatten = nn.Sequential(
+            nn.AvgPool2d(7),
+            nn.GELU()
+        )
+
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor:
+        x = self.flatten(x)
+        return x
+
+class Unflatten(nn.Module):
+    def __init__(self, in_channels: int):
+        super().__init__()
+        self.unflatten = nn.Sequential(
+            nn.ConvTranspose2d(in_channels, in_channels, 7, 7, 0),
+            nn.BatchNorm2d(in_channels),
+            nn.GELU()
+        )
+
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor:
+        x = self.unflatten(x)
+        return x
+
+class ConvBlock(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
+        self.block = nn.Sequential(
+            Conv(in_channels, out_channels),
+            Conv(out_channels, out_channels)
+        )
+
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor:
+        x = self.block(x)
+        return x
+
+class DownBlock(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
+        self.block = nn.Sequential(
+            DownConv(in_channels, out_channels),
+            ConvBlock(out_channels, out_channels)
+        )
+
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor:
+        x = self.block(x)
+        return x
+
+class UpBlock(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
+        self.block = nn.Sequential(
+            UpConv(in_channels, out_channels),
+            ConvBlock(out_channels, out_channels)
+        )
+
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor:
+        x = self.block(x)
+        return x</code></pre>
+      </details>
+      <details class="src">
+        <summary>UnconditionalUNet</summary>
+<pre><code>class UnconditionalUNet(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        num_hiddens: int,
+    ):
+        super().__init__()
+        D = num_hiddens
+        self.conv_in = ConvBlock(in_channels, D)
+        self.down1 = DownBlock(D, D)
+        self.down2 = DownBlock(D, 2 * D)
+        self.flatten = Flatten()
+        self.unflatten = Unflatten(2 * D)
+        self.up1 = UpBlock(4 * D, D)
+        self.up2 = UpBlock(2 * D, D)
+        self.conv_out = ConvBlock(2 * D, D)
+        self.out = nn.Conv2d(D, in_channels, 3, 1, 1)
+
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor:
+        assert x.shape[-2:] == (28, 28), "Expect input shape to be (28, 28)."
+        e1 = self.conv_in(x)
+        e2 = self.down1(e1)
+        e3 = self.down2(e2)
+        u = self.unflatten(self.flatten(e3))
+        u = self.up1(torch.cat([e3, u], dim=1))
+        u = self.up2(torch.cat([e2, u], dim=1))
+        u = self.conv_out(torch.cat([e1, u], dim=1))
+        x = self.out(u)
+        return x</code></pre>
+      </details>
+    </div>
+
+    <h2>1.2 · Using the UNet to train a denoiser</h2>
+    <p>Adding Gaussian noise to MNIST test digits using different standard deviations σ.</p>
+
+    <figure class="wide">
+      <img src="media/partb/1.2_noising_process_sigma0-1.png" alt="Five MNIST test digits noised at sigma 0, 0.2, 0.4, 0.5, 0.6, 0.8 and 1.0">
+      <figcaption>noising process<span class="offs">z = x + σε · σ = 0.0, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0</span></figcaption>
+    </figure>
+
+    <h3>1.2.1 · Training</h3>
+    <p>The UNet is able to denoise pretty well after the first epoch and recovers the digits almost completely after the 5th epoch.</p>
+
+    <figure class="wide">
+      <img src="media/partb/1.2.1_training_loss.png" alt="Training loss curve for the one-step denoiser at sigma 0.5">
+      <figcaption>training loss<span class="offs">σ = 0.5 · D = 128 · batch 256 · Adam 1e-4 · 5 epochs</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/partb/1.2.1_denoise_epoch1.png" alt="Test digits after epoch 1: clean, noisy, and denoised rows">
+      <figcaption>after epoch 1<span class="offs">rows: clean · noisy (σ = 0.5) · denoised</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/partb/1.2.1_denoise_epoch5.png" alt="Test digits after epoch 5: clean, noisy, and denoised rows">
+      <figcaption>after epoch 5<span class="offs">rows: clean · noisy (σ = 0.5) · denoised</span></figcaption>
+    </figure>
+
+    <h3>1.2.2 · Out-of-distribution testing</h3>
+    <p>The UNet stops working on images with much more noise than the σ = 0.5 it was trained on (σ = 0.8 and 1.0), because they have less information than what the model needs to accurately rebuild the digit, and it never saw noise that strong in training.</p>
+
+    <figure class="wide">
+      <img src="media/partb/1.2.2_ood_sigma_sweep.png" alt="One test digit noised at seven sigma levels, with the denoiser output below each">
+      <figcaption>noise sweep on one test digit<span class="offs">top: noisy · bottom: denoised · σ = 0.0 … 1.0 · trained at 0.5</span></figcaption>
+    </figure>
+
+    <h3>1.2.3 · Denoising pure noise</h3>
+    <p>Trying to denoise pure noise results in the output being the average of all the training digits.</p>
+
+    <figure class="wide">
+      <img src="media/partb/1.2.3_pure_noise_training_loss.png" alt="Training loss curve for the denoiser trained on pure noise">
+      <figcaption>training loss<span class="offs">input z = ε · D = 128 · batch 256 · Adam 1e-4 · 5 epochs</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/partb/1.2.3_pure_noise_epoch1.png" alt="Pure noise inputs and the model outputs after epoch 1">
+      <figcaption>after epoch 1<span class="offs">top: pure noise in · bottom: output</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/partb/1.2.3_pure_noise_epoch5.png" alt="Pure noise inputs and the model outputs after epoch 5, all a similar blurry average digit">
+      <figcaption>after epoch 5<span class="offs">top: pure noise in · bottom: output</span></figcaption>
+    </figure>
+
+    <h3>What the outputs show</h3>
+    <p>Pure noise carries no information about which digit it should become, so the output with the lowest MSE loss is the average of all the training digits.</p>
+
+    <h2>2.1 · Adding time conditioning to the UNet</h2>
+    <p>By conditioning the UNet on the time t and training it to predict the velocity x<sub>1</sub> − x<sub>0</sub> instead of the clean image, we turn the UNet into a flow matching model.</p>
+
+    <details class="src">
+      <summary>TimeConditionalUNet.forward</summary>
+<pre><code>t = t.view(-1, 1)
+t1 = self.fc1_t(t)[:, :, None, None]
+t2 = self.fc2_t(t)[:, :, None, None]
+
+e1 = self.conv_in(x)
+e2 = self.down1(e1)
+e3 = self.down2(e2)
+u = self.unflatten(self.flatten(e3)) * t1
+u = self.up1(torch.cat([e3, u], dim=1)) * t2
+u = self.up2(torch.cat([e2, u], dim=1))
+u = self.conv_out(torch.cat([e1, u], dim=1))
+return self.out(u)</code></pre>
+    </details>
+
+    <h2>2.2 · Training the UNet</h2>
+
+    <figure class="wide">
+      <img src="media/partb/2.2_time_cond_training_loss.png" alt="Training loss curve for the time-conditioned UNet">
+      <figcaption>training loss · time-conditioned<span class="offs">D = 64 · batch 64 · Adam 1e-2 · ExponentialLR γ = 0.1<sup>1/10</sup> · 10 epochs</span></figcaption>
+    </figure>
+
+    <h2>2.3 · Sampling from the UNet</h2>
+    <p>The time-conditioned UNet still has a hard time generating realistic digits because the model has no class information. It has to decide which digit to generate from the starting noise alone, which can result in hybrid digits if it starts between two digits. Unlike the one-step UNet from 1.2.3, its outputs have defined strokes, because it takes many small steps that refine the details.</p>
+
+    <figure class="wide">
+      <img src="media/partb/2.3_time_cond_samples_epoch1.png" alt="Forty digits sampled from the time-conditioned UNet after epoch 1">
+      <figcaption>time-conditioned · epoch 1<span class="offs">50 Euler steps · seed 0</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/partb/2.3_time_cond_samples_epoch5.png" alt="Forty digits sampled from the time-conditioned UNet after epoch 5">
+      <figcaption>time-conditioned · epoch 5<span class="offs">50 Euler steps · seed 0</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/partb/2.3_time_cond_samples_epoch10.png" alt="Forty digits sampled from the time-conditioned UNet after epoch 10">
+      <figcaption>time-conditioned · epoch 10<span class="offs">50 Euler steps · seed 0</span></figcaption>
+    </figure>
+
+    <h2>2.4 · Adding class conditioning to the UNet</h2>
+    <p>By adding class conditioning, the model is able to pull the generations in a more realistic direction, while the guidance (γ = 5) reduces the variation within each digit.</p>
+
+    <details class="src">
+      <summary>ClassConditionalUNet.forward</summary>
+<pre><code>t = t.view(-1, 1)
+c = F.one_hot(c, self.num_classes).float()
+if mask is not None:
+    c = c * mask.view(-1, 1)
+
+t1 = self.fc1_t(t)[:, :, None, None]
+t2 = self.fc2_t(t)[:, :, None, None]
+c1 = self.fc1_c(c)[:, :, None, None]
+c2 = self.fc2_c(c)[:, :, None, None]
+
+e1 = self.conv_in(x)
+e2 = self.down1(e1)
+e3 = self.down2(e2)
+u = c1 * self.unflatten(self.flatten(e3)) + t1
+u = c2 * self.up1(torch.cat([e3, u], dim=1)) + t2
+u = self.up2(torch.cat([e2, u], dim=1))
+u = self.conv_out(torch.cat([e1, u], dim=1))
+return self.out(u)</code></pre>
+    </details>
+
+    <h2>2.5 · Training the UNet</h2>
+
+    <figure class="wide">
+      <img src="media/partb/2.5_class_cond_training_loss.png" alt="Training loss curve for the class-conditioned UNet">
+      <figcaption>training loss · class-conditioned<span class="offs">D = 64 · batch 64 · Adam 1e-2 · ExponentialLR γ = 0.1<sup>1/10</sup> · p<sub>uncond</sub> = 0.1 · 10 epochs</span></figcaption>
+    </figure>
+
+    <h2>2.6 · Sampling from the UNet</h2>
+
+    <figure class="wide">
+      <img src="media/partb/2.6_class_cond_samples_epoch1.png" alt="Four samples of each digit 0 to 9 from the class-conditioned UNet after epoch 1">
+      <figcaption>class-conditioned · epoch 1<span class="offs">each row: digits 0 – 9 · γ = 5 · 300 Euler steps</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/partb/2.6_class_cond_samples_epoch5.png" alt="Four samples of each digit 0 to 9 from the class-conditioned UNet after epoch 5">
+      <figcaption>class-conditioned · epoch 5<span class="offs">each row: digits 0 – 9 · γ = 5 · 300 Euler steps</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/partb/2.6_class_cond_samples_epoch10.png" alt="Four samples of each digit 0 to 9 from the class-conditioned UNet after epoch 10">
+      <figcaption>class-conditioned · epoch 10<span class="offs">each row: digits 0 – 9 · γ = 5 · 300 Euler steps</span></figcaption>
+    </figure>
+
+    <h3>Without the learning rate scheduler</h3>
+
+    <figure class="wide">
+      <img src="media/partb/2.6_no_scheduler_training_loss.png" alt="Training loss curve for the class-conditioned UNet trained without a scheduler">
+      <figcaption>training loss · no scheduler<span class="offs">constant Adam 1e-3 · otherwise as above</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/partb/2.6_no_scheduler_samples_epoch1.png" alt="Four samples of each digit from the no-scheduler model after epoch 1">
+      <figcaption>no scheduler · epoch 1<span class="offs">each row: digits 0 – 9 · γ = 5</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/partb/2.6_no_scheduler_samples_epoch5.png" alt="Four samples of each digit from the no-scheduler model after epoch 5">
+      <figcaption>no scheduler · epoch 5<span class="offs">each row: digits 0 – 9 · γ = 5</span></figcaption>
+    </figure>
+
+    <figure class="wide">
+      <img src="media/partb/2.6_no_scheduler_samples_epoch10.png" alt="Four samples of each digit from the no-scheduler model after epoch 10">
+      <figcaption>no scheduler · epoch 10<span class="offs">each row: digits 0 – 9 · γ = 5</span></figcaption>
+    </figure>
+
+    <h3>Compensating for the scheduler</h3>
+    <p>I used a constant learning rate of 1e-3, the rate the scheduler decays to by the end of training (1e-2 × 0.1), instead of starting at 1e-2.
+      This kept the scheduled run's quality. 
+    </p>
+
+    
+
   </main>
 
   <footer>
