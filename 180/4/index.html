@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Final project · CS180 · Julien Schweighofer</title>
-<meta name="description" content="Final project — CS180 (UC Berkeley, Fall 2026), Julien Schweighofer.">
+<title>Project 4 · CS180 · Julien Schweighofer</title>
+<meta name="description" content="Project 4 — Image warping and mosaicing. CS180 (UC Berkeley, Fall 2026), Julien Schweighofer.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%230e0d0b'/%3E%3Crect x='5' y='9' width='22' height='15' rx='2' fill='none' stroke='%23e3d7ae' stroke-width='2'/%3E%3Ccircle cx='25.5' cy='7' r='3.6' fill='%23e2382f'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,31 +24,165 @@
 
   <a class="back" href="../">← Contact sheet</a>
 
-  <p class="framemeta">Frame F · Status: <b>Undeveloped</b></p>
-  <h2 class="frametitle">Final project</h2>
+  <p class="framemeta">Frame 04 · Status: <b>Developed</b></p>
+  <h2 class="frametitle">Project 4</h2>
+  <p class="subtitle">Image warping and mosaicing</p>
 
-  <!-- ▼ Placeholder — delete this whole <section> when the writeup below is ready. -->
-  <section class="plate">
-    <span class="rail" aria-hidden="true"></span>
-    <div class="pic">
-      <div class="dev">
-        <p class="devline">This frame hasn't been developed yet.</p>
-        <p class="devsub">The writeup will appear here once the project is released.</p>
-      </div>
-    </div>
-    <span class="edgeline" aria-hidden="true"><b>▸ FIN</b><span>TX&nbsp;5063</span></span>
-    <span class="rail" aria-hidden="true"></span>
-  </section>
-
-  <!-- ▼ Project writeup goes here. Suggested shapes:
-    <h2>Overview</h2>
-    <p>…</p>
-    <figure>
-      <img src="media/result.jpg" alt="Describe the result">
-      <figcaption>Fig. 1 — caption</figcaption>
-    </figure>
-  -->
   <main class="writeup">
+
+    <h2>Overview</h2>
+    <p>In this project I show how homographies can be used to stitch photos into mosaics and to rectify images.</p>
+    <p class="part">Part A · Image warping and mosaicing</p>
+
+    <h2>A.1 · Shooting the pictures</h2>
+    <p>I took Set 1 in my backyard, making sure to only rotate the camera and not move it. If I had moved the camera, objects close to
+      the camera and far from it would have shifted by different amounts (parallax), and no single homography could line them all up.
+      Set 2 came from screenshots of a video I took last winter in Japan.
+    </p>
+    <h3>Set 1 · Backyard, afternoon</h3>
+    <div class="row3">
+      <figure><img src="media/mosaic1_IMG_9410.jpg" alt="Left frame: the house next door and a patio with an umbrella"><figcaption>IMG_9410 · left</figcaption></figure>
+      <figure><img src="media/mosaic1_IMG_9411.jpg" alt="Center frame: trees, a tall conifer and a brick house roof"><figcaption>IMG_9411 · center</figcaption></figure>
+      <figure><img src="media/mosaic1_IMG_9412.jpg" alt="Right frame: a utility pole, flowering bushes and a white house"><figcaption>IMG_9412 · right</figcaption></figure>
+    </div>
+
+    <h3>Set 2 · Snowy garden</h3>
+    <div class="row2">
+      <figure><img src="media/mosaic2_IMG_9415.jpg" alt="Left frame: a snowy garden with stone lanterns and a bare tree"><figcaption>IMG_9415 · left</figcaption></figure>
+      <figure><img src="media/mosaic2_IMG_9417.jpg" alt="Right frame: more stone lanterns, a fence and a temple roof"><figcaption>IMG_9417 · right</figcaption></figure>
+    </div>
+
+    <h2>A.2 · Recovering homographies</h2>
+    <p>A homography maps a point p = (x, y, 1) to p′ = Hp.</p>
+
+<pre><code>x' = (h11·x + h12·y + h13) / (h31·x + h32·y + 1)
+y' = (h21·x + h22·y + h23) / (h31·x + h32·y + 1)
+
+[ x  y  1  0  0  0  −x·x'  −y·x' ] · h = x'
+[ 0  0  0  x  y  1  −x·y'  −y·y' ] · h = y'
+
+h = [ h11  h12  h13  h21  h22  h23  h31  h32 ]ᵀ</code></pre>
+
+    
+    <h3>Correspondences · IMG_9412 → IMG_9411</h3>
+    <p>I clicked points on well-defined features and avoided the trees, since they could move in the wind.</p>
+
+    <figure class="pair">
+      <img src="media/points_IMG_9412_IMG_9411.jpg" alt="IMG_9412 and IMG_9411 side by side with 7 numbered matching points">
+      <figcaption>Set 1 · IMG_9412 → IMG_9411<span class="offs">7 points</span></figcaption>
+    </figure>
+
+    <h3>The system for IMG_9412 → IMG_9411</h3>
+    <p>The 14 × 8 matrix A (left) and b (right).</p>
+<pre><code>[   140     876  1      0       0  0   -119700   -748980 ]   [    855 ]
+[     0       0  0    140     876  1   -119770   -749418 ]   [  855.5 ]
+[ 211.5   939.5  1      0       0  0   -194474   -863870 ]   [  919.5 ]
+[     0       0  0  211.5   939.5  1   -192571   -855415 ]   [  910.5 ]
+[ 592.5     898  1      0       0  0   -770546  -1167849 ]   [ 1300.5 ]
+[     0       0  0  592.5     898  1   -504810   -765096 ]   [    852 ]
+[   141    1079  1      0       0  0   -120978   -925782 ]   [    858 ]
+[     0       0  0    141    1079  1   -146640  -1122160 ]   [   1040 ]
+[   295  1777.5  1      0       0  0   -300015  -1807718 ]   [   1017 ]
+[     0       0  0    295  1777.5  1   -505040  -3043080 ]   [   1712 ]
+[ 730.5   447.5  1      0       0  0  -1088445   -666775 ]   [   1490 ]
+[     0       0  0  730.5   447.5  1   -244352   -149689 ]   [  334.5 ]
+[ 731.5    1063  1      0       0  0  -1092861  -1588122 ]   [   1494 ]
+[     0       0  0  731.5    1063  1   -749788  -1089575 ]   [   1025 ]</code></pre>
+
+    <p>Solving it gives</p>
+<pre><code>H = [     0.543897      0.015509        725.65 ]
+    [    -0.327175      0.863124       106.309 ]
+    [ -0.000322756   -1.1425e-06             1 ]</code></pre>
+
+    <h2>A.3 · Warping the images</h2>
+    <p>Both warps use inverse warping. I first send the corners of the input through H to get the boundaries of the output, and then use the inverse of H to find where each output pixel comes from in the input. Output pixels that land outside the
+      input stay black. I implemented nearest neighbor and bilinear interpolation. Nearest neighbor copies the closest input pixel. Bilinear
+      takes the four surrounding pixels and weights them by how close they are.
+    </p>
+    <p>For rectification the output box is clamped to at most twice the input size, because a strongly 
+      tilted plane can explode the dimensions of the output image (which happened in the olive picture).</p>
+
+
+    <h3>Rectification</h3>
+    <p>To test the warp on a single image, I click the four corners of something I know is a rectangle and map them onto an upright rectangle I define by hand.</p>
+
+    <h3>Rectification 1 · Building</h3>
+    <p>This one turned out pretty well since the rectangle is well defined and is a large part of the picture.</p>
+    <div class="row3">
+      <figure><img src="media/rect_IMG_9161_input.jpg" alt="Building facade shot from below at an angle, with a red quadrilateral around one bay of columns"><figcaption>input<span class="offs">clicked quad</span></figcaption></figure>
+      <figure><img src="media/rect_IMG_9161_nn.jpg" alt="The facade rectified with nearest-neighbor sampling: columns vertical, inscription level"><figcaption>nearest neighbor</figcaption></figure>
+      <figure><img src="media/rect_IMG_9161_bil.jpg" alt="The same rectification with bilinear sampling"><figcaption>bilinear</figcaption></figure>
+    </div>
+<pre><code>H = [     0.948506     0.0088616      0.350836 ]
+    [    -0.397544      0.802381       125.139 ]
+    [ -0.000425584   7.79042e-05             1 ]</code></pre>
+
+    <h3>Rectification 2 · Olive crate</h3>
+    <p>My grandpa picked these olives from his garden with his friends! Unfortunately none of the crates were great rectangles to map but it kind of works? </p>
+      <div class="row3">
+      <figure><img src="media/rect_rect2_input.jpg" alt="Red crates full of green olives seen at an angle, with a red quadrilateral around the top of one crate"><figcaption>input<span class="offs">clicked quad</span></figcaption></figure>
+      <figure><img src="media/rect_rect2_nn.jpg" alt="The crates rectified with nearest-neighbor sampling, seen from straight above"><figcaption>nearest neighbor</figcaption></figure>
+      <figure><img src="media/rect_rect2_bil.jpg" alt="The same rectification with bilinear sampling"><figcaption>bilinear</figcaption></figure>
+    </div>
+<pre><code>H = [      2.05623       1.17073      -1075.47 ]
+    [    -0.280211       3.98222      -1507.26 ]
+    [  1.49682e-05      0.001063             1 ]</code></pre>
+
+    <h3>Nearest neighbor vs. bilinear</h3>
+    <p>At full size the two look almost identical. But if you zoom into the text on the building, you can see that nearest neighbor leaves some edges rough, because neighboring output pixels repeat the same source pixel.
+      Bilinear gives smoother edges because it averages the four nearest pixels every time. Bilinear comes at a cost: nearest neighbor does one lookup per pixel, while bilinear does four lookups plus the weighting arithmetic.</p>
+
+    <h2>A.4 · Blending into a mosaic</h2>
+    <p>For each set I keep the center image unwarped as the reference and warp the others into its plane with bilinear sampling, all in one shot:</p>
+    <ol>
+      <li>Compute the homography from each side image to the center image.</li>
+      <li>Warp every image and use the union of their bounding boxes to size the final canvas.</li>
+      <li>Give each image a weight that is 1 at its center and falls off linearly to 0 at its edges, warped along with the image. Pixels with no data get a weight of 0.</li>
+      <li>Set each canvas pixel to the weighted average of all the images that cover it (feathering).</li>
+    </ol>
+
+    <p>Feathering hides the exposure differences between frames. You can see below that the sky isn't the same color in each picture, but the blend smooths over it.</p>
+    <div class="row2">
+      <figure><img src="media/seam_over.jpg" alt="Sky region of set 1 where each warped image is pasted over the previous one, with visible rectangular seams"><figcaption>overwrite<span class="offs">later image pasted on top</span></figcaption></figure>
+      <figure><img src="media/seam_blend.jpg" alt="The same sky region with weighted averaging, seams gone"><figcaption>weighted average<span class="offs">center-falloff alpha</span></figcaption></figure>
+    </div>
+    
+
+    <h3>Mosaic 1 · Backyard</h3>
+    <div class="row3">
+      <figure><img src="media/mosaic1_IMG_9410.jpg" alt="Source: left frame of the backyard"><figcaption>IMG_9410</figcaption></figure>
+      <figure><img src="media/mosaic1_IMG_9411.jpg" alt="Source: center frame of the backyard, used as the reference"><figcaption>IMG_9411 · reference</figcaption></figure>
+      <figure><img src="media/mosaic1_IMG_9412.jpg" alt="Source: right frame of the backyard"><figcaption>IMG_9412</figcaption></figure>
+    </div>
+    <figure class="wide">
+      <img src="media/mosaic1.jpg" alt="Three-image backyard mosaic: the neighbor's house on the left, trees and rooftops in the middle, the utility pole and flowering bushes on the right, under one continuous blue sky">
+      <figcaption>mosaic 1<span class="offs">3 images · center IMG_9411 · ×2 downsample · bilinear · feathered</span></figcaption>
+    </figure>
+    <p>The trees moved in the wind and became a little blurred but otherwise it is a good view of my patio. </p>
+
+    <h3>Mosaic 2 · Snowy garden</h3>
+    <div class="row2">
+      <figure><img src="media/mosaic2_IMG_9415.jpg" alt="Source: left frame of the snowy garden, used as the reference"><figcaption>IMG_9415 · reference</figcaption></figure>
+      <figure><img src="media/mosaic2_IMG_9417.jpg" alt="Source: right frame of the snowy garden"><figcaption>IMG_9417</figcaption></figure>
+    </div>
+    <figure class="wide">
+      <img src="media/mosaic2.jpg" alt="Two-image mosaic of the snowy garden: stone lanterns, a staked tree and a bronze basin in the foreground, pines and a temple roof behind">
+      <figcaption>mosaic 2<span class="offs">2 images · center IMG_9415 · full resolution · bilinear · feathered</span></figcaption>
+    </figure>
+    <p>The blur of the poles most likely comes from me moving, but aside from that it looks good.</p>
+
+    <h3>Mosaic 3 · Street at night</h3>
+    <div class="row3">
+      <figure><img src="media/mosaic3_IMG_9418.jpg" alt="Source: left frame of the night street"><figcaption>IMG_9418</figcaption></figure>
+      <figure><img src="media/mosaic3_IMG_9419.jpg" alt="Source: center frame of the night street, used as the reference"><figcaption>IMG_9419 · reference</figcaption></figure>
+      <figure><img src="media/mosaic3_IMG_9420.jpg" alt="Source: right frame of the night street"><figcaption>IMG_9420</figcaption></figure>
+    </div>
+    <figure class="wide">
+      <img src="media/mosaic3.jpg" alt="Three-image night mosaic: a street lamp glowing above the road, double yellow lines, parked cars on both sides and houses on the right">
+      <figcaption>mosaic 3<span class="offs">3 images · center IMG_9419 · ×2 downsample · bilinear · feathered</span></figcaption>
+    </figure>
+    <p>I had a hard time finding the correspondences for these pictures. It turned out much better than expected! I thought the bright light would be exposed differently in each picture, but it
+      stayed pretty similar between them.</p>
   </main>
 
   <footer>
